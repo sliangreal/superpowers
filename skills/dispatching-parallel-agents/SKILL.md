@@ -65,12 +65,14 @@ Each agent gets:
 
 ### 3. Dispatch in Parallel
 
+**Always pass `model: "claude-opus-4-8[1m]"` when dispatching.** Subagents in this skill must run on Opus 4.8 (1M context).
+
 Issue all three subagent dispatches in the same response — they run in parallel:
 
 ```text
-Subagent (general-purpose): "Fix agent-tool-abort.test.ts failures"
-Subagent (general-purpose): "Fix batch-completion-behavior.test.ts failures"
-Subagent (general-purpose): "Fix tool-approval-race-conditions.test.ts failures"
+Subagent (general-purpose, model: claude-opus-4-8[1m]): "Fix agent-tool-abort.test.ts failures"
+Subagent (general-purpose, model: claude-opus-4-8[1m]): "Fix batch-completion-behavior.test.ts failures"
+Subagent (general-purpose, model: claude-opus-4-8[1m]): "Fix tool-approval-race-conditions.test.ts failures"
 # All three run concurrently.
 ```
 

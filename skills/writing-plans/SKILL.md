@@ -165,10 +165,18 @@ After saving the plan, offer execution choice:
 
 **Which approach?"**
 
+**Worktree consent gate (mandatory, runs before either path):**
+
+After the user picks an execution method, but BEFORE invoking the execution skill, you MUST invoke `superpowers:using-git-worktrees`. That skill detects existing isolation and, if the user has not already declared a preference, asks for consent before creating a worktree. Do not skip this step — work that mutates the repo without an explicit worktree decision can pollute the user's current branch.
+
+If the user has already declared a worktree preference earlier in the session (or you're already in a linked worktree), `using-git-worktrees` will short-circuit. Either way, run it.
+
 **If Subagent-Driven chosen:**
-- **REQUIRED SUB-SKILL:** Use superpowers:subagent-driven-development
+1. **REQUIRED SUB-SKILL:** Use superpowers:using-git-worktrees (ensures isolated workspace + consent)
+2. **REQUIRED SUB-SKILL:** Use superpowers:subagent-driven-development
 - Fresh subagent per task + two-stage review
 
 **If Inline Execution chosen:**
-- **REQUIRED SUB-SKILL:** Use superpowers:executing-plans
+1. **REQUIRED SUB-SKILL:** Use superpowers:using-git-worktrees (ensures isolated workspace + consent)
+2. **REQUIRED SUB-SKILL:** Use superpowers:executing-plans
 - Batch execution with checkpoints for review

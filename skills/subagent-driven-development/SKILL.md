@@ -44,6 +44,10 @@ digraph when_to_use {
 
 ## The Process
 
+**Step 0 — Worktree consent gate (mandatory, before reading the plan):**
+
+Invoke `superpowers:using-git-worktrees` BEFORE reading the plan or dispatching any subagent. That skill detects existing isolation and, if needed, explicitly asks the user whether to create an isolated worktree. Do not skip this. If the user already declared a preference earlier (or you're already in a linked worktree), the skill short-circuits — but you must still invoke it so the decision is on the record.
+
 ```dot
 digraph process {
     rankdir=TB;
@@ -60,11 +64,13 @@ digraph process {
         "Mark task complete in todo list and progress ledger" [shape=box];
     }
 
+    "Run superpowers:using-git-worktrees (worktree consent gate)" [shape=box style=filled fillcolor=lightyellow];
     "Read plan, note context and global constraints, create todos" [shape=box];
     "More tasks remain?" [shape=diamond];
     "Dispatch final code reviewer subagent (../requesting-code-review/code-reviewer.md)" [shape=box];
     "Use superpowers:finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
+    "Run superpowers:using-git-worktrees (worktree consent gate)" -> "Read plan, note context and global constraints, create todos";
     "Read plan, note context and global constraints, create todos" -> "Dispatch implementer subagent (./implementer-prompt.md)";
     "Dispatch implementer subagent (./implementer-prompt.md)" -> "Implementer subagent asks questions?";
     "Implementer subagent asks questions?" -> "Answer questions, provide context" [label="yes"];
@@ -98,36 +104,9 @@ conflicts that only emerge from implementation.
 
 ## Model Selection
 
-Use the least powerful model that can handle each role to conserve cost and increase speed.
+**Use `claude-opus-4-8[1m]` (Opus 4.8, 1M context) for every subagent dispatch in this skill** — implementer, task reviewer, and the final whole-branch reviewer. When dispatching a subagent, pass `model: "claude-opus-4-8[1m]"` explicitly.
 
-**Mechanical implementation tasks** (isolated functions, clear specs, 1-2 files): use a fast, cheap model. Most implementation tasks are mechanical when the plan is well-specified.
-
-**Integration and judgment tasks** (multi-file coordination, pattern matching, debugging): use a standard model.
-
-**Architecture and design tasks**: use the most capable available model.
-The final whole-branch review is one of these — dispatch it on the most
-capable available model, not the session default.
-
-**Review tasks**: choose the model with the same judgment, scaled to the
-diff's size, complexity, and risk. A small mechanical diff does not need the
-most capable model; a subtle concurrency change does.
-
-**Always specify the model explicitly when dispatching a subagent.** An
-omitted model inherits your session's model — often the most capable and
-most expensive — which silently defeats this section.
-
-**Turn count beats token price.** Wall-clock and context cost scale with how
-many turns a subagent takes, and the cheapest models routinely take 2-3× the
-turns on multi-step work — costing more overall. Use a mid-tier model as the
-floor for reviewers and for implementers working from prose descriptions.
-When the task's plan text contains the complete code to write, the
-implementation is transcription plus testing: use the cheapest tier for
-that implementer. Single-file mechanical fixes also take the cheapest tier.
-
-**Task complexity signals (implementation tasks):**
-- Touches 1-2 files with a complete spec → cheap model
-- Touches multiple files with integration concerns → standard model
-- Requires design judgment or broad codebase understanding → most capable model
+This overrides any cost/speed-based model tiering. All roles — including the final whole-branch review — run on `claude-opus-4-8[1m]`. Never omit the model: an omitted model silently inherits the session's model.
 
 ## Handling Implementer Status
 
@@ -140,12 +119,11 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 **NEEDS_CONTEXT:** The implementer needs information that wasn't provided. Provide the missing context and re-dispatch.
 
 **BLOCKED:** The implementer cannot complete the task. Assess the blocker:
-1. If it's a context problem, provide more context and re-dispatch with the same model
-2. If the task requires more reasoning, re-dispatch with a more capable model
-3. If the task is too large, break it into smaller pieces
-4. If the plan itself is wrong, escalate to the human
+1. If it's a context problem, provide more context and re-dispatch (still on `claude-opus-4-8[1m]`)
+2. If the task is too large, break it into smaller pieces
+3. If the plan itself is wrong, escalate to the human
 
-**Never** ignore an escalation or force the same model to retry without changes. If the implementer said it's stuck, something needs to change.
+All re-dispatches stay on `claude-opus-4-8[1m]` — there is no model escalation in this configuration. If Opus 4.8 is stuck, the fix is more context, smaller scope, or human review.
 
 ## Handling Reviewer ⚠️ Items
 
@@ -367,6 +345,7 @@ Done!
 ## Red Flags
 
 **Never:**
+- Skip the worktree consent gate (Step 0) — invoke `superpowers:using-git-worktrees` before reading the plan, every time
 - Start implementation on main/master branch without explicit user consent
 - Skip task review, or accept a report missing either verdict (spec compliance AND task quality are both required)
 - Proceed with unfixed issues
